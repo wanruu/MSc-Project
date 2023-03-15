@@ -50,3 +50,4 @@ scheduler = get_cosine_schedule_with_warmup(optimizer,
 print("* Starting training...")
 model.to(config.device)
 train(train_dataloader, model, optimizer, scheduler, epochs=config.epoch_num)
+torch.save(model.state_dict(), f"checkpoints/test.pt")
