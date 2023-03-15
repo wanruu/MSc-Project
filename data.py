@@ -139,7 +139,7 @@ class NERDataset(Dataset):
 
 # TODO: now only consider poi
 def gen_bio(record: list):
-    addr, poi = record[0:2]
+    addr, poi, building, unit, floor, room = record
     # match poi
     idxs = [addr.index(symbol) if symbol in addr else -1 for symbol in poi]
     valid = -1 not in idxs

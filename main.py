@@ -5,7 +5,7 @@ from model import BertNER
 
 import torch
 from torch.utils.data import DataLoader
-from transformers import BertModel, BertTokenizer
+from transformers import BertTokenizer
 from transformers.optimization import get_cosine_schedule_with_warmup, AdamW
 
 
@@ -48,5 +48,6 @@ scheduler = get_cosine_schedule_with_warmup(optimizer,
                                             num_warmup_steps=(config.epoch_num // 10) * train_steps_per_epoch,
                                             num_training_steps=config.epoch_num * train_steps_per_epoch)
 
-
-train(train_dataloader, model, optimizer, scheduler, epochs=1)
+print("* Starting training...")
+model.to(config.device)
+train(train_dataloader, model, optimizer, scheduler, epochs=config.epoch_num)
