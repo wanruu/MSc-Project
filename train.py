@@ -2,6 +2,7 @@ from tqdm import tqdm
 
 
 def train(dataloader, model, optimizer, scheduler, epochs):
+    model.train()
     for epoch in range(epochs):
         total_loss = 0.0
         for data, labels in tqdm(dataloader):
