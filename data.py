@@ -58,10 +58,9 @@ class RecordsTool:
         clean_records = list(filter(lambda record: set(record[1:])-{""}, records))
 
         # convert full-width to half-width
-        # delete space
         for row_idx, record in enumerate(clean_records):
             for col_idx, item in enumerate(record):
-                tmp = item.replace("（", "(").replace("）", ")").replace(" ", "")
+                tmp = item.replace("（", "(").replace("）", ")")
                 clean_records[row_idx][col_idx] = tmp
 
         print(f"(size={len(clean_records)})")
@@ -88,8 +87,10 @@ class RecordsTool:
 class NERDataset(Dataset):
     def __init__(self, records, label_func, tokenizer):
         self.data = self.preprocess(records, label_func, tokenizer)
+        # self.raw_addr = [r[0] for r in records]
 
     def __getitem__(self, index):
+        # print(self.raw_addr[index])
         return self.data[index]
     
     def __len__(self):
@@ -121,8 +122,8 @@ class NERDataset(Dataset):
         max_label_len = max([len(label) for label in labels])
 
         # padding
-        batch_data = np.ones((batch_size, max_len))
-        batch_labels = np.ones((batch_size, max_label_len))
+        batch_data = np.zeros((batch_size, max_len))
+        batch_labels = np.zeros((batch_size, max_label_len))
         for idx in range(batch_size):
             cur_len = len(sentences[idx])
             cur_label_len = len(labels[idx])
@@ -138,24 +139,69 @@ class NERDataset(Dataset):
         return batch_data, batch_labels
 
 
-# TODO: now only consider poi
 def gen_bio(record: list):
-    addr, poi, building, unit, floor, room = record
-    # match poi
-    idxs = [addr.index(symbol) if symbol in addr else -1 for symbol in poi]
-    valid = -1 not in idxs
 
-    if not valid:
+    def add_prefix(labels: list):
+        new_labels = labels[:]
+        # check each label
+        for idx in range(len(labels)):
+            # ignore O
+            if labels[idx] == "O":
+                continue
+            # add B-
+            if idx == 0 or labels[idx-1] != labels[idx]:
+                new_labels[idx] = "B-" + new_labels[idx]
+            # add I-
+            elif labels[idx-1] == labels[idx]:
+                new_labels[idx] = "I-" + new_labels[idx]
+        return new_labels
+
+    def match_entity(addr, entity, split=False):
+        # preprocess
+        addr = addr.lower()
+        entity = entity.lower()
+
+        # full matching
+        if entity in addr:
+            start_idx = addr.index(entity)
+            end_idx = start_idx + len(entity)
+            return list(range(start_idx, end_idx))
+
+        # split matching for POI
+        elif split:
+            res_idxs = []
+            last_idx = -1
+            for char in entity:
+                sub_addr = addr[last_idx+1:]
+                if char in sub_addr:
+                    last_idx = sub_addr.index(char) + last_idx + 1
+                    res_idxs.append(last_idx)
+            return res_idxs
         return None
 
-    boi = ["O" for _ in addr]
-    for idx in idxs:
-        boi[idx] = "I-POI"
-    for idx in range(0, len(boi)):
-        if boi[idx] == "I-POI":
-            if idx == 0 or "-POI" not in boi[idx-1]:
-                boi[idx] = "B-POI"
+    # retrieve data
+    addr = record[0]
+    entities = record[1:6]
+    labels = ["POI", "building", "unit", "floor", "room"]
+    
+    # init result
+    bio = ["O" for _ in addr]
 
-    return boi
+    # generate
+    for entity, label in zip(entities, labels):
+        match_res = match_entity(addr, entity, split=label=="POI")
+        if match_res is None:
+            return None
+
+        for idx in match_res:
+            if bio[idx] == "floor" and label == "room":
+                bio[idx] = "floor|room"
+            else:
+                bio[idx] = label
+
+    # prefix
+    bio = add_prefix(bio)
+
+    return bio
 
 

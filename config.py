@@ -20,12 +20,17 @@ label2id = {
     "I-unit": 8,
     "I-floor": 9,
     "I-room": 10,
+    "B-floor|room": 11,
+    "I-floor|room": 12,
 }
 id2label = {label2id[label]: label for label in label2id}
 
 # model
 bert_model = "bert-base-chinese"
 roberta_model = "hfl/chinese-roberta-wwm-ext-large"
+
+# new tokens
+new_tokens = [" "] + [chr(_) for _ in range(97,123)] + [chr(_) for _ in range(65,91)]  # space, a-z, A-Z
 
 # hyperparameter
 learning_rate = 3e-5

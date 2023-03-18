@@ -3,6 +3,7 @@ from data import NERDataset, gen_bio, RecordsTool
 from train import train
 from model import BertNER
 
+import time
 import torch
 from torch.utils.data import DataLoader
 from transformers import BertTokenizer
@@ -12,6 +13,8 @@ from transformers.optimization import get_cosine_schedule_with_warmup, AdamW
 print("* Loading BERT model and tokenizer...")
 tokenizer = BertTokenizer.from_pretrained(config.bert_model)
 model = BertNER.from_pretrained(config.bert_model, num_labels=len(config.label2id))
+num_added_toks = tokenizer.add_tokens(config.new_tokens)
+model.resize_token_embeddings(len(tokenizer))
 
 
 print("* Preparing data...")
@@ -23,6 +26,7 @@ test_dataset = NERDataset(test_records, gen_bio, tokenizer)
 
 train_dataloader = DataLoader(train_dataset, config.batch_size, shuffle=False, collate_fn=train_dataset.collate_fn)
 test_dataloader = DataLoader(test_dataset, config.batch_size, shuffle=False, collate_fn=test_dataset.collate_fn)
+print(len(train_dataset), len(test_dataset), len(train_dataset)+len(test_dataset))
 
 
 print("* Preparing optimizer & scheduler...")
@@ -50,4 +54,6 @@ scheduler = get_cosine_schedule_with_warmup(optimizer,
 print("* Starting training...")
 model.to(config.device)
 train(train_dataloader, model, optimizer, scheduler, epochs=config.epoch_num)
-torch.save(model.state_dict(), f"checkpoints/test.pt")
+cur_time = time.strftime("%Y-%m-%d_%H-%M", time.localtime()) 
+torch.save(model.state_dict(), f"checkpoints/{cur_time}.pt")
+
