@@ -70,6 +70,7 @@ class RecordsTool:
     def split(self, records, lengths) -> list:
         # deep copy and shuffle
         _records = records.copy()
+        np.random.seed(10)
         np.random.shuffle(_records)
 
         # crop by length
