@@ -1,7 +1,7 @@
 import torch
 
 # data source
-data_file = "./data.xls"
+data_file = "./data/20230315.xls"
 data_headers = ["用户地址", "POI", "楼", "单元", "层", "房间"]
 
 # device
