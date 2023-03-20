@@ -19,3 +19,13 @@ class Metrics:
             match_mat = torch.eq(self.preds[x], self.actuals[y])
             matched += int(torch.all(match_mat))
         return matched / len(self.preds)
+    
+    @property
+    def sep_acc(self):
+        matched = 0
+        total = 0
+        for x, y in zip(self.preds, self.actuals):
+            match_mat = torch.eq(self.preds[x], self.actuals[y])
+            matched += torch.count_nonzero(match_mat)
+            total += match_mat.shape[0]
+        return matched / total

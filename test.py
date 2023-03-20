@@ -31,7 +31,7 @@ def test(dataloader, model):
     for data, labels in tqdm(dataloader):
         pred = test_single(data, model)
         M.append(pred, labels[0])
-    print(f"Accuracy: {M.acc}")
+    print(f"Accuracy: {M.acc}, {M.sep_acc}")
 
 
 if __name__ == "__main__":
