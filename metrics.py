@@ -1,4 +1,4 @@
-
+import torch
 
 
 class Metrics:
@@ -16,5 +16,6 @@ class Metrics:
     def acc(self):
         matched = 0
         for x, y in zip(self.preds, self.actuals):
-            matched += int(x==y)
+            match_mat = torch.eq(self.preds[x], self.actuals[y])
+            matched += int(torch.all(match_mat))
         return matched / len(self.preds)
