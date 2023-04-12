@@ -27,10 +27,11 @@ id2label = {label2id[label]: label for label in label2id}
 
 # model
 bert_model = "bert-base-chinese"
-roberta_model = "hfl/chinese-roberta-wwm-ext-large"
+roberta_model = "hfl/chinese-roberta-wwm-ext"#-large"
+bert_wwm_model = "hfl/chinese-bert-wwm"
 
 # new tokens
-new_tokens = [" "] + [chr(_) for _ in range(97,123)] + [chr(_) for _ in range(65,91)]  # space, a-z, A-Z
+new_tokens = [" "] # + [chr(_) for _ in range(97,123)] + [chr(_) for _ in range(65,91)]  # space, a-z, A-Z
 
 # hyperparameter
 learning_rate = 3e-5

@@ -7,25 +7,26 @@ import numpy as np
 from torch.utils.data import Dataset
 
 
-class RecordsTool:
+class DataTool:
     def __init__(self, filename, headers, ratios):
         # read & clean
-        records = self.read(filename, headers)
-        records = self.clean(records)
+        records = self._read(filename, headers)
+        records = self._clean(records)
         records_len = len(records)
-        self.all = records
+        # self.all = records
+        
         # normalize ratios -> lengths
         ratios = np.array(ratios)
         ratios = ratios / np.sum(ratios)
         lengths = [int(ratio*records_len) for ratio in ratios[:-1]]
         lengths.append(records_len-sum(lengths))
-        self.splited = self.split(records, lengths)        
+        self.split = self._split(records, lengths)
 
-    def read(self, filename, headers) -> list:
+    def _read(self, filename, headers) -> list:
         """Read file [filename] with [data_header] and [label_headers], return a 2D list."""
         print(f"Reading records from {filename}...", end="")
 
-        def read_xls():
+        def _read_xls():
             # read .xls file, read sheet
             sheet = xlrd.open_workbook(filename).sheet_by_index(0)
 
@@ -39,22 +40,22 @@ class RecordsTool:
                 cells = sheet.row(row_idx)
                 valid_cells = [cells[idx] for idx in valid_headers_idxs]
                 # this line convert float to str(int(_))
-                record = [str(cell.value) if cell.ctype != 2 else str(int(cell.value)) for cell in valid_cells]
+                record = [str(cell.value).lower() if cell.ctype != 2 else str(int(cell.value)) for cell in valid_cells]
                 records.append(record)
             return records
         
         filetype = os.path.splitext(filename)[-1]
         if filetype == ".xls":
-            records = read_xls()
+            records = _read_xls()
         else:
             records = []
         
         print(f"(size={len(records)})")
         return records
 
-    def clean(self, records: list) -> list:
+    def _clean(self, records: list) -> list:
         print("Cleaning records...", end="")
-        # remove invalid data (eg, no notation)
+        # remove invalid data (ie, no notation)
         clean_records = list(filter(lambda record: set(record[1:])-{""}, records))
 
         # convert full-width to half-width
@@ -66,7 +67,7 @@ class RecordsTool:
         print(f"(size={len(clean_records)})")
         return clean_records
 
-    def split(self, records, lengths) -> list:
+    def _split(self, records, lengths) -> list:
         # deep copy and shuffle
         _records = records.copy()
         np.random.seed(10)
@@ -141,7 +142,7 @@ class NERDataset(Dataset):
 
 def gen_bio(record: list):
 
-    def add_prefix(labels: list):
+    def _add_prefix(labels: list):
         new_labels = labels[:]
         # check each label
         for idx in range(len(labels)):
@@ -156,11 +157,7 @@ def gen_bio(record: list):
                 new_labels[idx] = "I-" + new_labels[idx]
         return new_labels
 
-    def match_entity(addr, entity, split=False):
-        # preprocess
-        addr = addr.lower()
-        entity = entity.lower()
-
+    def _match_entity(addr, entity, split=False):
         # full matching
         if entity in addr:
             start_idx = addr.index(entity)
@@ -189,7 +186,7 @@ def gen_bio(record: list):
 
     # generate
     for entity, label in zip(entities, labels):
-        match_res = match_entity(addr, entity, split=label=="POI")
+        match_res = _match_entity(addr, entity, split=label=="POI")
         if match_res is None:
             return None
 
@@ -200,8 +197,17 @@ def gen_bio(record: list):
                 bio[idx] = label
 
     # prefix
-    bio = add_prefix(bio)
+    bio = _add_prefix(bio)
 
     return bio
 
 
+def test_bio(idx):
+    tool = DataTool(config.data_file, config.data_headers, ratios=[1,1])
+    train_records, test_records = tool.split
+    r = train_records[idx]
+    bio = gen_bio(r)
+    for c, tag in zip(r[0], bio):
+        print(c, tag)
+
+# test_bio(10)

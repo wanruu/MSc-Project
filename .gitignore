@@ -1,4 +1,6 @@
 __pycache__/
+report/
 checkpoints/
 data/
-report.md
+.vscode/
+*.xlsx

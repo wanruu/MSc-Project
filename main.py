@@ -1,5 +1,6 @@
 import config
-from data import NERDataset, gen_bio, RecordsTool
+from data import NERDataset, gen_bio, DataTool
+from test import test
 from train import train
 from model import BertNER
 
@@ -18,14 +19,14 @@ model.resize_token_embeddings(len(tokenizer))
 
 
 print("* Preparing data...")
-tool = RecordsTool(config.data_file, config.data_headers, ratios=[1,1])
-train_records, test_records = tool.splited
+tool = DataTool(config.data_file, config.data_headers, ratios=[1,1])
+train_records, test_records = tool.split
 
 train_dataset = NERDataset(train_records, gen_bio, tokenizer)
 test_dataset = NERDataset(test_records, gen_bio, tokenizer)
 
 train_dataloader = DataLoader(train_dataset, config.batch_size, shuffle=False, collate_fn=train_dataset.collate_fn)
-test_dataloader = DataLoader(test_dataset, config.batch_size, shuffle=False, collate_fn=test_dataset.collate_fn)
+test_dataloader = DataLoader(test_dataset, 1, shuffle=False, collate_fn=test_dataset.collate_fn)
 print(len(train_dataset), len(test_dataset), len(train_dataset)+len(test_dataset))
 
 
@@ -55,5 +56,8 @@ print("* Starting training...")
 model.to(config.device)
 train(train_dataloader, model, optimizer, scheduler, epochs=config.epoch_num)
 cur_time = time.strftime("%Y-%m-%d_%H-%M", time.localtime()) 
-torch.save(model.state_dict(), f"checkpoints/{cur_time}.pt")
+torch.save(model.state_dict(), f"checkpoints/bert-{cur_time}.pt")
 
+
+print("* Starting testing...")
+test(test_dataloader, model)
