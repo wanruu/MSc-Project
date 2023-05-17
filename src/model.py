@@ -32,5 +32,5 @@ class BertNER(BertPreTrainedModel):
             loss_mask = labels.gt(-1)
             loss = self.crf(logits, labels, loss_mask) * (-1)
             outputs = (loss,) + outputs
-
+  
         return outputs

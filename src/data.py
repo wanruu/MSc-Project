@@ -13,7 +13,6 @@ class DataTool:
         records = self._read(filename, headers)
         records = self._clean(records)
         records_len = len(records)
-        # self.all = records
         
         # normalize ratios -> lengths
         ratios = np.array(ratios)
@@ -24,7 +23,7 @@ class DataTool:
 
     def _read(self, filename, headers) -> list:
         """Read file [filename] with [data_header] and [label_headers], return a 2D list."""
-        print(f"Reading records from {filename}...", end="")
+        print(f"- Reading records from {filename}...", end="")
 
         def _read_xls():
             # read .xls file, read sheet
@@ -54,15 +53,25 @@ class DataTool:
         return records
 
     def _clean(self, records: list) -> list:
-        print("Cleaning records...", end="")
-        # remove invalid data (ie, no notation)
+        print("- Cleaning records...", end="")
+        # remove invalid data (ie, no tag)
         clean_records = list(filter(lambda record: set(record[1:])-{""}, records))
+        print("Empty tagging:", len(records)-len(clean_records))
 
         # convert full-width to half-width
         for row_idx, record in enumerate(clean_records):
             for col_idx, item in enumerate(record):
                 tmp = item.replace("（", "(").replace("）", ")")
                 clean_records[row_idx][col_idx] = tmp
+        
+        # remove repeat records
+        n = len(clean_records)
+        poi_dict = dict()
+        for record in clean_records:
+            if record[0] not in poi_dict:
+                poi_dict[record[0]] = record
+        clean_records = [poi_dict[poi] for poi in poi_dict]
+        print("Repeated:", len(clean_records)-n)
 
         print(f"(size={len(clean_records)})")
         return clean_records
@@ -211,3 +220,5 @@ def test_bio(idx):
         print(c, tag)
 
 # test_bio(10)
+
+DataTool(config.data_file, config.data_headers, 0.5)
