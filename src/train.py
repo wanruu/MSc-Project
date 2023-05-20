@@ -14,4 +14,4 @@ def train(dataloader, model, optimizer, scheduler, epochs):
             optimizer.step()
             scheduler.step()
         total_loss = total_loss / len(data)
-        print(f"Epoch: {epoch}, loss: {total_loss:.2f}")
+        print(f"Epoch: {epoch}, loss: {total_loss:.3f}")

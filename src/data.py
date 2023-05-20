@@ -23,7 +23,7 @@ class DataTool:
 
     def _read(self, filename, headers) -> list:
         """Read file [filename] with [data_header] and [label_headers], return a 2D list."""
-        print(f"- Reading records from {filename}...", end="")
+        print(f"- Reading records from {filename}...")
 
         def _read_xls():
             # read .xls file, read sheet
@@ -49,11 +49,11 @@ class DataTool:
         else:
             records = []
         
-        print(f"(size={len(records)})")
+        print(f"Final size: {len(records)}")
         return records
 
     def _clean(self, records: list) -> list:
-        print("- Cleaning records...", end="")
+        print("- Cleaning records...")
         # remove invalid data (ie, no tag)
         clean_records = list(filter(lambda record: set(record[1:])-{""}, records))
         print("Empty tagging:", len(records)-len(clean_records))
@@ -71,12 +71,13 @@ class DataTool:
             if record[0] not in poi_dict:
                 poi_dict[record[0]] = record
         clean_records = [poi_dict[poi] for poi in poi_dict]
-        print("Repeated:", len(clean_records)-n)
+        print("Repeated POI:", n-len(clean_records))
 
-        print(f"(size={len(clean_records)})")
+        print(f"Final size: {len(clean_records)}")
         return clean_records
 
     def _split(self, records, lengths) -> list:
+        print("- Splitting records...")
         # deep copy and shuffle
         _records = records.copy()
         np.random.seed(10)
@@ -91,22 +92,22 @@ class DataTool:
             split_records.append(sub_records)
             start_idx = end_idx
 
+        print([len(sr) for sr in split_records])
         return split_records
 
 
 class NERDataset(Dataset):
     def __init__(self, records, label_func, tokenizer):
-        self.data = self.preprocess(records, label_func, tokenizer)
-        # self.raw_addr = [r[0] for r in records]
+        self.data = self.preprocess(records, label_func, tokenizer)  # (token_ids, label_ids, raw)
 
     def __getitem__(self, index):
-        # print(self.raw_addr[index])
         return self.data[index]
     
     def __len__(self):
         return len(self.data)
 
     def preprocess(self, origin_records, label_func, tokenizer):
+        print("- Parsing labels...")
         data = []
         for record in origin_records:
             # process label
@@ -119,13 +120,14 @@ class NERDataset(Dataset):
             # label_ids
             label_ids = [config.label2id.get(label) for label in labels]
             data.append((token_ids, label_ids))
+        print(f"In: {len(origin_records)}, Out: {len(data)}")
         return data
 
     def collate_fn(self, batch):
         # data in batch
-        sentences = [x[0] for x in batch]
-        labels = [x[1] for x in batch]
-    
+        sentences = [x[0] for x in batch]  # [token_ids]
+        labels = [x[1] for x in batch]  # [label_ids]
+
         # size, length information
         batch_size = len(sentences)
         max_len = max([len(sentence) for sentence in sentences])
@@ -220,5 +222,3 @@ def test_bio(idx):
         print(c, tag)
 
 # test_bio(10)
-
-DataTool(config.data_file, config.data_headers, 0.5)

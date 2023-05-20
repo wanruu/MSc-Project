@@ -3,15 +3,15 @@ import numpy as np
 
 class Metrics:
     def __init__(self):
-        self.raws = dict()
+        self.input_ids = dict()
         self.preds = dict()
-        self.actuals = dict()
+        self.labels = dict()
         self.index = 0
     
-    def append(self, raw, pred, actual):
-        self.raws[self.index] = raw
+    def append(self, input_ids, labels, pred):
+        self.input_ids[self.index] = input_ids
+        self.labels[self.index] = labels
         self.preds[self.index] = pred
-        self.actuals[self.index] = actual
         self.index += 1
 
     # @property
@@ -22,48 +22,61 @@ class Metrics:
     #         matched += int(torch.all(match_mat))
     #     return matched / len(self.preds)
 
-    @property
-    def accuracy(self):
-        matched = 0
-        total = 0
-        for x, y in zip(self.preds, self.actuals):
-            match_mat = torch.eq(self.preds[x], self.actuals[y])
-            matched += torch.count_nonzero(match_mat)
-            total += match_mat.shape[0]
-        return matched / total
-
-
-    # def with_target(self, target):
-    #     tp, fn, fp, tn = 0, 0, 0, 0
+    # @property
+    # def accuracy(self):
+    #     matched = 0
+    #     total = 0
     #     for x, y in zip(self.preds, self.actuals):
-    #         pred = torch.eq(self.preds[x], target)
-    #         actual = torch.eq(self.actuals[y], target)
-    #         tp += torch.count_nonzero(pred & actual)
-    #         tn += torch.count_nonzero(~pred & ~actual)
-    #         fn += torch.count_nonzero(~pred & actual)
-    #         fp += torch.count_nonzero(pred & ~actual)
-        
-    #     acc = (tp + tn) / (tp + fp + tn + fn)
-    #     prec = tp / (tp + fp)
-    #     recall = tp / (tp + fn)
-    #     f1 = 2 * prec * recall / (prec + recall)
-    #     return acc, prec, recall, f1
+    #         match_mat = torch.eq(self.preds[x], self.actuals[y])
+    #         matched += torch.count_nonzero(match_mat)
+    #         total += match_mat.shape[0]
+    #     return matched / total
 
 
-    def with_target_full_match(self, target):
-        bad_cases = set()
-        correct, total = 0, 0
+    def token_level(self, label_id):
+        """Token level metrics"""
+        tp, fn, fp, tn = 0, 0, 0, 0
         for idx in range(self.index):
-            pred = self.preds[idx].detach().cpu().numpy()
-            actual = self.actuals[idx].detach().cpu().numpy()
+            preds = torch.eq(self.preds[idx], label_id)  # [True, False, ...]
+            labels = torch.eq(self.labels[idx], label_id)
+            tp += torch.count_nonzero(preds & labels)  # pred=True, label=True
+            tn += torch.count_nonzero(~preds & ~labels)  # pred=label=False
+            fp += torch.count_nonzero(preds & ~labels)  # pred=True, label=False
+            fn += torch.count_nonzero(~preds & labels)  # pred=False, label=True
+        
+        accuracy = (tp + tn) / (tp + fp + tn + fn)
+        precision = tp / (tp + fp)
+        recall = tp / (tp + fn)
+        f1 = 2 * precision * recall / (precision + recall)
+        return accuracy.item(), precision.item(), recall.item(), f1.item()
 
-            pred = pred[pred==target].nonzero()[0]
-            actual = actual[actual==target].nonzero()[0]
-            
-            if pred.shape == actual.shape and np.all(pred==actual):
+
+    def entity_level(self, label_id):
+        """Entity level accuracy"""
+
+        correct = 0
+        for idx in range(self.index):
+            # input_ids = self.input_ids[idx][1:]  # remove [CLS]
+
+            preds = self.preds[idx].detach().cpu().numpy()
+            labels = self.labels[idx].detach().cpu().numpy()
+
+            pred_idxes = np.where(preds==label_id)[0]
+            label_idxes = np.where(labels==label_id)[0]
+
+            # print(input_ids[pred_idxes])
+            if pred_idxes.shape==label_idxes.shape and np.all(np.equal(pred_idxes, label_idxes)):
                 correct += 1
-            else:
-                bad_cases.add(idx)
-            total += 1
+            
+        return correct/self.index
 
-        return correct/total, bad_cases, f"{correct}/{total}"
+    def sentence_level(self):
+        """Sentence level accuracy"""
+
+        correct = 0
+        for idx in range(self.index):
+            preds = self.preds[idx].detach().cpu().numpy()
+            labels = self.labels[idx].detach().cpu().numpy()
+            if np.all(np.equal(preds, labels)):
+                correct += 1
+        return correct/self.index
