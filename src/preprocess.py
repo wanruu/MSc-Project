@@ -1,60 +1,54 @@
-import re
-from utils import xls_reader, xls_writer
+import os
+import json
+import argparse
 
-# data to pre-process
-data = xls_reader("../data/preprocessed/20230412.xls").to_dict()
-print("size:", len(data))
+from utils import DataTool, Tag
 
-# valid fieldnames
-fieldnames = ["用户地址", "POI", "楼", "单元", "层", "房间"]
+parser = argparse.ArgumentParser(description="")
+parser.add_argument("--raw_data_file", help=".xls raw data file")
+parser.add_argument("--save_dir", help="save directory")
+parser.add_argument("--tag_method", help="[ bio_13 | ]")
+args = parser.parse_args()
 
-
-# convert to half-width, lowercase
-# full match: 17528 -> 17533
-data = [{key: item[key].lower().replace("（", "(").replace("）", ")") for key in item} for item in data]
-
-# remove space not between digits, alphabet
-# full match: 17533 -> 17549
-data = [{key: re.sub(r"(?<![a-z0-9])\s(?![a-z0-9])", "", item[key]) for key in item} for item in data]
+assert args.raw_data_file[-4:] == ".xls"
 
 
-# full match
-n_full_match = 0
-for item in data:
-    full_match = True
-    for fieldname in fieldnames[1:]:
-        if item[fieldname] not in item["用户地址"]:
-            full_match = False
-            break
-    n_full_match += full_match
-print("full match:", n_full_match)
-
-# manual process
-# full match 17549 -> 17777
-if_end = False
-for item_idx, item in enumerate(data):
-    if item_idx < 1856:
-        continue
-    for fieldname in fieldnames[1:]:
-        if item[fieldname] not in item["用户地址"]:
-            print(item_idx, item["用户地址"])
-            print(fieldname)
-            print(item[fieldname])
-
-            new_val = input()
-            if not new_val:
-                continue
-            elif new_val == 'break':
-                if_end = True
-                break
-            elif new_val == ' ':
-                data[item_idx][fieldname] = ''
-            else:
-                data[item_idx][fieldname] = new_val
-            print()
-    if if_end:
-        break
+# prepare data
+data_header = ["用户地址", "POI", "楼", "单元", "层", "房间"]
+train_data, test_data = DataTool(args.raw_data_file, data_header, [0.5, 0.5]).split
 
 
-writer = xls_writer("../data/preprocessed/20230412.xls")
-writer.write_dict(data)
+# prepare tagging method
+t = Tag(args.tag_method)
+generate_tags = t.generate_func
+label2id = t.label2id
+
+
+# save training/testing data as json file
+def convert(record):
+    tokens = list(record[0])
+    tags = generate_tags(record)
+    if tags:
+        # tag_ids = [label2id[tag] for tag in tags]
+        return {"raw": record, "tokens": tokens, "ner_tags": tags}
+    return None
+
+
+if not os.path.exists(args.save_dir):
+    os.mkdir(args.save_dir)
+
+with open(os.path.join(args.save_dir, "train.json"), "w") as train_file:
+    train_json = [convert(record) for record in train_data if convert(record)]
+    train_file.write(json.dumps(train_json, indent=4))
+
+with open(os.path.join(args.save_dir, "test.json"), "w") as test_file:
+    test_json = [convert(record) for record in test_data if convert(record)]
+    test_file.write(json.dumps(test_json, indent=4))
+
+
+# save features
+with open(os.path.join(args.save_dir, "features.json"), "w") as features_file:
+    features = {
+        "ner_tags": list(label2id.keys()),
+    }
+    features_file.write(json.dumps(features, indent=4))

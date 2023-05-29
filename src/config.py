@@ -1,9 +1,5 @@
 import torch
 
-# data source
-data_file = "../data/20230412.xls"
-data_headers = ["用户地址", "POI", "楼", "单元", "层", "房间"]
-
 # device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
