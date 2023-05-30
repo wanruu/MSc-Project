@@ -1,6 +1,5 @@
-import config
-from test import test
-from train import train
+# customized
+from utils import device, custom_load_dataset, custom_get_dataloader
 
 # torch
 import torch
@@ -14,11 +13,14 @@ from transformers.optimization import get_cosine_schedule_with_warmup, AdamW
 
 import os
 import json
+import logging
 import numpy as np
-from datasets import ClassLabel, load_dataset, Features, Sequence, Value
 from torchcrf import CRF
 from dataclasses import dataclass, field
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class BertNER(BertPreTrainedModel):
@@ -49,58 +51,72 @@ class BertNER(BertPreTrainedModel):
             loss_mask = labels.gt(-1)
             loss = self.crf(logits, labels, loss_mask) * (-1)
             outputs = (loss,) + outputs
-  
+
         return outputs
 
-@dataclass
-class ModelArguments:
-    """
-    Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
-    """
 
-    model_name_or_path: str = field(
+from utils import Metrics
+
+import torch
+from tqdm import tqdm
+from transformers.modeling_outputs import TokenClassifierOutput
+
+
+def test_single(input_ids, model):
+    """
+    Example:
+        data(batch_size=1): tensor([[101,1298,2255,3255,1736,118,21129,128,3406,21128,
+            113,1298,2255,3255,1736, 21129,128,3406,122,122,3517,114]], device='cuda:0')
+        return: tensor([1, 6, 6, 6, 0, 2, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 9, 0, 0], device='cuda:0')
+    """
+    mask = input_ids.gt(0)
+    output = model(input_ids, token_type_ids=None, attention_mask=mask, labels=None)[0][0]
+    labels = torch.argmax(output, dim=1)
+    return labels
+
+
+def test(dataloader, model, id2label):
+    model.eval()
+    M = Metrics()
+    for input_ids, label_ids in tqdm(dataloader):
+        labels = [id2label[label] for label in label_ids[0].cpu().numpy()]
+        preds = [id2label[pred] for pred in test_single(input_ids, model).cpu().numpy()]
+        M.append(labels, preds)
+
+    return M.compute()
+
+
+def train(dataloader, model, optimizer, scheduler, epoch_num):
+    model.train()
+    for epoch in range(int(epoch_num)):
+        total_loss = 0.0
+        for data, labels in tqdm(dataloader):
+            loss = model(input_ids=data, token_type_ids=None, attention_mask=data.gt(0), labels=labels)[0]
+            total_loss += loss.item()
+            model.zero_grad()
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+        total_loss = total_loss / len(data)
+        logger.info(f"Epoch: {epoch}, loss: {total_loss:.3f}")
+
+
+@dataclass
+class Arguments:
+    model_name: str = field(
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
-    # config_name: Optional[str] = field(
-    #     default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
-    # )
-    # tokenizer_name: Optional[str] = field(
-    #     default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
-    # )
-    # cache_dir: Optional[str] = field(
-    #     default=None,
-    #     metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
-    # )
-    # model_revision: str = field(
-    #     default="main",
-    #     metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
-    # )
-    # use_auth_token: bool = field(
-    #     default=False,
-    #     metadata={
-    #         "help": "Will use the token generated when running `transformers-cli login` (necessary to use this script "
-    #         "with private models)."
-    #     },
-    # )
+    batch_size: int = field(metadata={"help": "Training batch size"})
 
-@dataclass
-class DataTrainingArguments:
-    """
-    Arguments pertaining to what data we are going to input our model for training and eval.
-    """
     features_file: str = field(
         metadata={"help": "An input features data file."}
     )
     train_file: Optional[str] = field(
-        default=None, metadata={"help": "The input training data file (a csv or JSON file)."}
+        default=None, metadata={"help": "The input training data file (a JSON file)."}
     )
     test_file: Optional[str] = field(
         default=None,
-        metadata={"help": "An optional input test data file to predict on (a csv or JSON file)."},
-    )
-    preprocessing_num_workers: Optional[int] = field(
-        default=None,
-        metadata={"help": "The number of processes to use for the preprocessing."},
+        metadata={"help": "An optional input test data file to predict on (a JSON file)."},
     )
     
     def __post_init__(self):
@@ -109,48 +125,43 @@ class DataTrainingArguments:
         else:
             if self.train_file is not None:
                 extension = self.train_file.split(".")[-1]
-                assert extension in ["csv", "json"], "`train_file` should be a csv or a json file."
+                assert extension == "json", "`train_file` should be a json file."
             if self.test_file is not None:
                 extension = self.test_file.split(".")[-1]
-                assert extension in ["csv", "json"], "`test_file` should be a csv or a json file."
+                assert extension == "json", "`test_file` should be a json file."
 
 
 if __name__ == "__main__":
     # Parse arguments
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
-    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    parser = HfArgumentParser((Arguments, TrainingArguments))
+    args, training_args = parser.parse_args_into_dataclasses()
 
 
     # Create directory
     if not os.path.exists(training_args.output_dir):
         os.makedirs(training_args.output_dir)
+    file_handler = logging.FileHandler(os.path.join(training_args.output_dir, "train.log"))
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # Log parameters
+    logger.info(args)
+    logger.info(training_args)
 
 
     # Load dataset from files
-    print("* Loading datasets from files...")
-    data_files = {}
-    if data_args.train_file is not None:
-        data_files["train"] = data_args.train_file
-        extension = data_args.train_file.split(".")[-1]
-    if data_args.test_file is not None:
-        data_files["test"] = data_args.test_file
-        extension = data_args.test_file.split(".")[-1]
-    with open(data_args.features_file, 'r') as f:
-        tags = json.load(f)["ner_tags"]
-    datasets = load_dataset(extension, data_files=data_files, features=Features({
-        "raw": Sequence(feature=Value(dtype="string")),
-        "tokens": Sequence(feature=Value(dtype="string")),
-        "ner_tags": Sequence(feature=ClassLabel(names=tags)),
-    }))
+    logger.info("* Loading datasets from files...")
+    datasets = custom_load_dataset(
+        features_file=args.features_file,
+        train_file=args.train_file,
+        test_file=args.test_file
+    )
 
     
     # Get label list
-    if training_args.do_train:
-        column_names = datasets["train"].column_names
-        features = datasets["train"].features
-    else:
-        column_names = datasets["test"].column_names
-        features = datasets["test"].features
+    features = datasets["train"].features if training_args.do_train else datasets["test"].features
     label_list = features["ner_tags"].feature.names
     label2id = {label_list[i]: i for i in range(len(label_list))}
     id2label = id2label = {label2id[label]: label for label in label2id}
@@ -158,16 +169,14 @@ if __name__ == "__main__":
 
 
     # Load pretrained model and tokenizer
-    print("* Loading BERT model and tokenizer...")
-    tokenizer = BertTokenizer.from_pretrained(model_args.model_name_or_path)
-    model = BertNER.from_pretrained(model_args.model_name_or_path, num_labels=num_labels)
-    model.to(config.device)
-    # num_added_toks = tokenizer.add_tokens(config.new_tokens)
-    # model.resize_token_embeddings(len(tokenizer))
+    logger.info("* Loading BERT model and tokenizer...")
+    tokenizer = BertTokenizer.from_pretrained(args.model_name)
+    model = BertNER.from_pretrained(args.model_name, num_labels=num_labels)
+    model.to(device)
 
 
     # Prepare data
-    print("* Preparing data...")
+    logger.info("* Preparing data...")
     def preprocess(examples):
         # add [CLS]
         tokens = ["[CLS]"] + examples["tokens"]
@@ -175,90 +184,66 @@ if __name__ == "__main__":
         examples["token_ids"] = token_ids
         return examples
 
-    def collate_fn(batch):
-        # data in batch
-        sentences = [x["token_ids"] for x in batch]  # [token_ids]
-        labels = [x["ner_tags"] for x in batch]  # [label_ids]
-
-        # size, length information
-        batch_size = len(sentences)
-        max_len = max([len(sentence) for sentence in sentences])
-        max_label_len = max([len(label) for label in labels])
-
-        # padding
-        batch_data = np.zeros((batch_size, max_len))
-        batch_labels = np.zeros((batch_size, max_label_len))
-        for idx in range(batch_size):
-            cur_len = len(sentences[idx])
-            cur_label_len = len(labels[idx])
-            batch_data[idx][:cur_len] = sentences[idx]
-            batch_labels[idx][:cur_label_len] = labels[idx]
-
-        # convert to tensors
-        batch_data = torch.tensor(batch_data, dtype=torch.long)
-        batch_labels = torch.tensor(batch_labels, dtype=torch.long)
-
-        batch_data, batch_labels = batch_data.to(config.device), batch_labels.to(config.device)
-
-        return batch_data, batch_labels
-
 
     if training_args.do_train:
         if "train" not in datasets:
             raise ValueError("--do_train requires a train dataset")
-        train_dataset = datasets["train"]
-        train_dataset = train_dataset.map(
-            preprocess,
-            num_proc=data_args.preprocessing_num_workers
-        )
-        train_dataloader = DataLoader(train_dataset, config.batch_size, shuffle=False, collate_fn=collate_fn)
+        train_dataset = datasets["train"].map(preprocess)
+        train_dataloader = custom_get_dataloader(dataset=train_dataset, batch_size=args.batch_size)
+
 
     if training_args.do_predict:
         if "test" not in datasets:
             raise ValueError("--do_predict requires a test dataset")
-        test_dataset = datasets["test"]
-        test_dataset = test_dataset.map(
-            preprocess,
-            num_proc=data_args.preprocessing_num_workers
-        )
-        test_dataloader = DataLoader(test_dataset, 1, shuffle=False, collate_fn=collate_fn)
+        test_dataset = datasets["test"].map(preprocess)
+        test_dataloader = custom_get_dataloader(dataset=test_dataset, batch_size=1)
+
 
     # train
     if training_args.do_train:
-        print("* Preparing optimizer & scheduler...")
+        logger.info("* Preparing optimizer & scheduler...")
         bert_optimizer = list(model.bert.named_parameters())
         classifier_optimizer = list(model.classifier.named_parameters())
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
             {"params": [p for n, p in bert_optimizer if not any(nd in n for nd in no_decay)],
-                "weight_decay": config.weight_decay},
+                "weight_decay": training_args.weight_decay},
             {"params": [p for n, p in bert_optimizer if any(nd in n for nd in no_decay)],
                 "weight_decay": 0.0},
             {"params": [p for n, p in classifier_optimizer if not any(nd in n for nd in no_decay)],
-                "lr": config.learning_rate * 5, "weight_decay": config.weight_decay},
+                "lr": training_args.learning_rate * 5, "weight_decay": training_args.weight_decay},
             {"params": [p for n, p in classifier_optimizer if any(nd in n for nd in no_decay)],
-                "lr": config.learning_rate * 5, "weight_decay": 0.0},
-            {"params": model.crf.parameters(), "lr": config.learning_rate * 5}
+                "lr": training_args.learning_rate * 5, "weight_decay": 0.0},
+            {"params": model.crf.parameters(), "lr": training_args.learning_rate * 5}
         ]
-        optimizer = AdamW(optimizer_grouped_parameters, lr=config.learning_rate, correct_bias=False)
-        train_steps_per_epoch = len(train_dataset) // config.batch_size
+        optimizer = AdamW(optimizer_grouped_parameters, lr=training_args.learning_rate, correct_bias=False)
+        train_steps_per_epoch = len(train_dataset) // args.batch_size
         scheduler = get_cosine_schedule_with_warmup(optimizer,
-                                                    num_warmup_steps=(config.epoch_num // 10) * train_steps_per_epoch,
-                                                    num_training_steps=config.epoch_num * train_steps_per_epoch)
+                                                    num_warmup_steps=(int(training_args.num_train_epochs) // 10) * train_steps_per_epoch,
+                                                    num_training_steps=int(training_args.num_train_epochs * train_steps_per_epoch))
 
-        print("* Starting training...")
-        train(train_dataloader, model, optimizer, scheduler, epochs=config.epoch_num)
+        logger.info("* Starting training...")
+        train(
+            dataloader=train_dataloader, 
+            model=model, 
+            optimizer=optimizer, 
+            scheduler=scheduler, 
+            epoch_num=training_args.num_train_epochs
+        )
         torch.save(model.state_dict(), os.path.join(training_args.output_dir, "checkpoint.pt"))
 
     # test
     if training_args.do_predict:
-        print("* Starting testing...")
+        logger.info("* Starting testing...")
         if not training_args.do_train:
             state_dict = torch.load(os.path.join(training_args.output_dir, "checkpoint.pt"))
             model.load_state_dict(state_dict)
 
-        
-        metrics = test(test_dataloader, model, id2label)
+        metrics = test(
+            dataloader=test_dataloader,
+            model=model,
+            id2label=id2label
+        )
         with open(os.path.join(training_args.output_dir, "all_results.json"), "w") as f:
             f.write(json.dumps(metrics, indent=4))
-        print(metrics)
+        # logger.info(metrics)

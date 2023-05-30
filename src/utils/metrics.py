@@ -38,21 +38,21 @@ class Metrics:
                 tn += np.count_nonzero(~x & ~y)  # pred=label=False
                 fp += np.count_nonzero(x & ~y)  # pred=True, label=False
                 fn += np.count_nonzero(~x & y)  # pred=False, label=True
-            accuracy = (tp + tn) / (tp + fp + tn + fn)
-            precision = tp / (tp + fp)
-            recall = tp / (tp + fn)
-            f1 = 2 * precision * recall / (precision + recall)
-            results[f"token__{label}_accuracy"] = accuracy
-            results[f"token__{label}_precision"] = precision
-            results[f"token__{label}_recall"] = recall
-            results[f"token__{label}_f1"] = f1
+            accuracy = (tp + tn) / (tp + fp + tn + fn) if tp + fp + tn + fn != 0 else 0
+            precision = tp / (tp + fp) if tp + fp != 0 else 0
+            recall = tp / (tp + fn) if tp + fn != 0 else 0
+            f1 = 2 * precision * recall / (precision + recall) if precision + recall != 0 else 0
+            results[f"token_{label}_accuracy"] = accuracy
+            results[f"token_{label}_precision"] = precision
+            results[f"token_{label}_recall"] = recall
+            results[f"token_{label}_f1"] = f1
 
         correct = 0
         total = 0
         for p, l in zip(preds, labels):
             correct += np.count_nonzero(np.equal(p, l))
             total += len(p)
-        results["token__overall_accuracy"] = correct / total
+        results["token_overall_accuracy"] = correct / total
 
 
         # entity level
@@ -63,7 +63,7 @@ class Metrics:
                 label_idxes = np.where(np.array(l)==label)[0]
                 if pred_idxes.shape==label_idxes.shape and np.all(np.equal(pred_idxes, label_idxes)):
                     correct += 1
-            results[f"entity__{label}_accuracy"] = correct / len(preds)
+            results[f"entity_{label}_accuracy"] = correct / len(preds)
 
 
         # sentence level
@@ -71,7 +71,7 @@ class Metrics:
         for p, l in zip(preds, labels):
             if np.all(np.equal(p, l)):
                 correct += 1
-        results["sentence__number"] = len(preds)
-        results["sentence__accuracy"] = correct / len(preds)
+        results["sentence_number"] = len(preds)
+        results["sentence_accuracy"] = correct / len(preds)
         
         return results

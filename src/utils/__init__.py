@@ -1,7 +1,13 @@
 from .excel_module import xls_reader, xls_writer
-from .data_tool import DataTool
+from .data_tool import DataTool, custom_get_dataloader, custom_load_dataset
 from .metrics import Metrics
 from . import bio_13
+
+
+import torch
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Tag:

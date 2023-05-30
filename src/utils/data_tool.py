@@ -1,6 +1,14 @@
 import os
 import xlrd
+import json
+import torch
 import numpy as np
+from torch.utils.data import DataLoader
+from datasets import ClassLabel, load_dataset, Features, Sequence, Value
+
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class DataTool:
@@ -92,3 +100,63 @@ class DataTool:
         return split_records
 
 
+
+def custom_load_dataset(features_file, train_file=None, test_file=None):
+    data_files = {}
+    if train_file is not None:
+        data_files["train"] = train_file
+        extension = train_file.split(".")[-1]
+    if test_file is not None:
+        data_files["test"] = test_file
+        extension = test_file.split(".")[-1]
+    with open(features_file, "r") as f:
+        tags = json.load(f)["ner_tags"]
+    
+    datasets = load_dataset(
+        extension,
+        data_files=data_files,
+        features=Features(
+            {
+                "raw": Sequence(feature=Value(dtype="string")),
+                "tokens": Sequence(feature=Value(dtype="string")),
+                "ner_tags": Sequence(feature=ClassLabel(names=tags)),
+            }
+        ),
+    )
+
+    return datasets
+
+
+def custom_get_dataloader(dataset, batch_size):
+    def collate_fn(batch):
+        # data in batch
+        input_ids = [x["token_ids"] for x in batch]  # [token_ids]
+        labels = [x["ner_tags"] for x in batch]  # [label_ids]
+
+        # size, length information
+        batch_size = len(input_ids)
+        max_len = max([len(sentence) for sentence in input_ids])
+        max_label_len = max([len(label) for label in labels])
+
+        # padding
+        batch_data = np.zeros((batch_size, max_len))
+        batch_labels = np.zeros((batch_size, max_label_len))
+        for idx in range(batch_size):
+            cur_len = len(input_ids[idx])
+            cur_label_len = len(labels[idx])
+            batch_data[idx][:cur_len] = input_ids[idx]
+            batch_labels[idx][:cur_label_len] = labels[idx]
+
+        # convert to tensors
+        batch_data = torch.tensor(batch_data, dtype=torch.long)
+        batch_labels = torch.tensor(batch_labels, dtype=torch.long)
+
+        batch_data, batch_labels = batch_data.to(device), batch_labels.to(device)
+
+        return batch_data, batch_labels
+
+
+    # dataset = dataset.map(preprocess)
+    dataloader = DataLoader(dataset, batch_size, shuffle=False, collate_fn=collate_fn)
+
+    return dataloader
