@@ -1,10 +1,9 @@
 # customized
-from utils import device, custom_load_dataset, custom_get_dataloader
+from utils import device, custom_load_dataset, custom_get_dataloader, Metrics
 
 # torch
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
 # transformer
@@ -14,7 +13,7 @@ from transformers.optimization import get_cosine_schedule_with_warmup, AdamW
 import os
 import json
 import logging
-import numpy as np
+from tqdm import tqdm
 from torchcrf import CRF
 from dataclasses import dataclass, field
 from typing import Optional
@@ -30,7 +29,7 @@ class BertNER(BertPreTrainedModel):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
         self.crf = CRF(num_tags=config.num_labels, batch_first=True)
-        self.init_weights()
+        # self.init_weights()
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None):
         outputs = self.bert(input_ids=input_ids,
@@ -53,13 +52,6 @@ class BertNER(BertPreTrainedModel):
             outputs = (loss,) + outputs
 
         return outputs
-
-
-from utils import Metrics
-
-import torch
-from tqdm import tqdm
-from transformers.modeling_outputs import TokenClassifierOutput
 
 
 def test_single(input_ids, model):
@@ -244,6 +236,6 @@ if __name__ == "__main__":
             model=model,
             id2label=id2label
         )
-        with open(os.path.join(training_args.output_dir, "all_results.json"), "w") as f:
+        with open(os.path.join(training_args.output_dir, "results.json"), "w") as f:
             f.write(json.dumps(metrics, indent=4))
         # logger.info(metrics)
