@@ -1,12 +1,8 @@
 python ../src/run_bert_others.py \
-    --model_name hfl/chinese-roberta-wwm-ext \
-    --learning_rate 0.00003 \
-    --epoch_num 10 \
-    --batch_size 32 \
-    --weight_decay 0.01 \
-    --train_file ../data/bio_13-20230412/train.json \
-    --test_file ../data/bio_13-20230412/test.json \
-    --features_file ../data/bio_13-20230412/features.json \
-    --output_dir ../tmp/bert \
+    --model_name_or_path hfl/chinese-roberta-wwm-ext \
+    --train_file ../data/bio_11-20230531/train.json \
+    --test_file ../data/bio_11-20230531/test.json \
+    --features_file ../data/bio_11-20230531/features.json \
+    --output_dir ../tmp/roberta_others_bio11 \
     --do_train \
     --do_predict

@@ -236,6 +236,6 @@ if __name__ == "__main__":
             model=model,
             id2label=id2label
         )
-        with open(os.path.join(training_args.output_dir, "results.json"), "w") as f:
+        with open(os.path.join(training_args.output_dir, "all_results.json"), "w") as f:
             f.write(json.dumps(metrics, indent=4))
         # logger.info(metrics)

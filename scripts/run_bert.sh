@@ -1,13 +1,13 @@
 python ../src/run_bert.py \
     --model_name hfl/chinese-roberta-wwm-ext \
-    --learning_rate 5e-5 \
-    --num_train_epochs 3 \
+    --learning_rate 3e-5 \
+    --num_train_epochs 10 \
     --batch_size 32 \
     --adam_epsilon 1e-8 \
     --warmup_ratio 0 \
     --train_file ../data/bio_13-20230412/train.json \
     --test_file ../data/bio_13-20230412/test.json \
     --features_file ../data/bio_13-20230412/features.json \
-    --output_dir ../tmp/roberta \
+    --output_dir ../tmp/roberta_2 \
     --do_train True \
     --do_predict True

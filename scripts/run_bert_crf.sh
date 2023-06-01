@@ -4,9 +4,9 @@ python ../src/run_bert_crf.py \
     --num_train_epochs 10 \
     --batch_size 32 \
     --weight_decay 0.01 \
-    --train_file ../data/bio_13-20230412/train.json \
-    --test_file ../data/bio_13-20230412/test.json \
-    --features_file ../data/bio_13-20230412/features.json \
-    --output_dir ../tmp/roberta_crf \
+    --train_file ../data/bio_11-20230531/train.json \
+    --test_file ../data/bio_11-20230531/test.json \
+    --features_file ../data/bio_11-20230531/features.json \
+    --output_dir ../tmp/roberta_crf_bio11 \
     --do_train True \
     --do_predict True
