@@ -145,6 +145,8 @@ if __name__ == "__main__":
     model = AutoModelForTokenClassification.from_pretrained(
         args.model_name, num_labels=num_labels
     )
+    num_params = sum(param.numel() for param in model.parameters() if param.requires_grad)
+    logger.info(f"# paramters: {num_params}")
     model.to(device)
 
 

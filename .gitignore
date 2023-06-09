@@ -6,3 +6,4 @@ log/
 tmp/
 .vscode/
 *.xlsx
+.vector_cache/

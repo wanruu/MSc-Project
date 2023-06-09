@@ -1,13 +1,13 @@
-python ../src/run_bert.py \
-    --model_name hfl/chinese-bert-wwm \
-    --learning_rate 3e-5 \
-    --num_train_epochs 10 \
+python ../src/run_bilstm.py \
+    --learning_rate 0.05 \
+    --weight_decay 1e-4 \
+    --num_train_epochs 300 \
     --batch_size 32 \
-    --adam_epsilon 1e-8 \
-    --warmup_ratio 0 \
+    --embedding_dim 50 \
+    --hidden_dim 64 \
     --train_file ../data/20230601-bio_13_split/train.json \
     --test_file ../data/20230601-bio_13_split/test.json \
     --features_file ../data/20230601-bio_13_split/features.json \
-    --output_dir ../tmp/bert-wwm \
+    --output_dir ../tmp/bilstm \
     --do_train True \
     --do_predict True
